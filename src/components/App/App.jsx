@@ -1,96 +1,109 @@
 import { Component } from 'react';
-import { Searchbar } from '../Searchbar/Searchbar';
 import { fetchPixabayImages } from '../Api/Api';
+import { Searchbar } from '../Searchbar/Searchbar';
+import { Loader } from '../Loader/Loader';
 import { ImageGallery } from '../ImageGallery/ImageGallery';
 import { Button } from '../Button/Button';
-import { Loader } from '../Loader/Loader';
 import { Modal } from '../Modal/Modal';
-import React from 'react';
 
 export class App extends Component {
   state = {
+    inputRequest: '',
     images: [],
-    search: '',
+    page: 1,
+    per_page: 12,
     isLoading: false,
-    pageNumber: 1,
-    modalIsOpen: false,
-    modalImg: '',
-    modalAlt: '',
+    loadMore: false,
+    error: null,
+    showModal: false,
+    largeImageURL: 'largeImageURL',
+    id: null,
   };
 
-  handleSubmit = async e => {
-    e.preventDefault();
-    this.setState({ isLoading: true });
-    const input = e.target.elements.input;
-    if (input.value.trim() === '') {
-      return;
+  componentDidUpdate(_, prevState) {
+  const { inputRequest, page } = this.state;
+  if (prevState.inputRequest !== inputRequest || prevState.page !== page) {
+  this.fetchImages(inputRequest, page);
     }
-    const response = await fetchPixabayImages(input.value, 1);
-    this.setState({
-      images: response,
-      isLoading: false,
-      search: input.value,
-      pageNumber: 1,
-    });
-  };
-
-  handleClickMore = async () => {
-    const response = await fetchPixabayImages(
-      this.state.search,
-      this.state.pageNumber + 1
-    );
-    this.setState({
-      images: [...this.state.images, ...response],
-      pageNumber: this.state.pageNumber + 1,
-    });
-  };
-
-  handleImageClick = e => {
-    this.setState({
-      modalIsOpen: true,
-      modalAlt: e.target.alt,
-      modalImg: e.target.name,
-    });
-  };
-
-  handleModalClose = () =>
-  this.setState({ modalIsOpen: false, modalImg: '', modalAlt: '' });
-
-  handleKeyDown = event => {
-    if (event.code === 'Escape') {
-      this.handleModalClose();
-    }
-  };
-
-  async componentDidMount() {
-    window.addEventListener('keydown', this.handleKeyDown);
   }
 
+   fetchImages = async (query, page) => {
+    this.setState({ isLoading: true });
+    if (!query) {
+      return;
+    }
+    try {
+      const { hits, totalHits } = await fetchPixabayImages(query, page);
+      const totalPages = Math.ceil(totalHits / this.state.per_page);
+      const shouldLoadMore = page < totalPages;
+      this.setState(prevState => ({
+        images: [...prevState.images, ...hits],
+        loadMore: shouldLoadMore,
+      }));
+    } catch (error) {
+      this.setState({ error: error.message });
+    } finally {
+      this.setState({ isLoading: false });
+    }
+  };
+  
+
+  formSubmit = inputRequest => {
+    this.setState({
+      inputRequest,
+      images: [],
+      page: 1,
+      loadMore: false,
+    });
+  };
+
+  onloadMore = () => {
+    this.setState(prevState => ({ page: prevState.page + 1 }));
+   };
+
+ openModal = largeImageURL => {
+   this.setState({
+      showModal: true,
+      largeImageURL: largeImageURL,
+    });
+  };
+
+  closeModal = () => {
+    this.setState({
+      showModal: false,
+    });
+  };
+
   render() {
+    const { images, isLoading, loadMore, page, showModal, largeImageURL } =
+      this.state;
     return (
-      <div className='App'>
-        {this.state.isLoading ? (
+      <>
+        <Searchbar onSubmit={this.formSubmit} />
+       {isLoading ? (
           <Loader />
         ) : (
-          <>
-            <Searchbar onSubmit={this.handleSubmit} />
-            <ImageGallery
-              onImageClick={this.handleImageClick}
-              images={this.state.images}
-            />
-            {this.state.images.length > 0 ? (
-              <Button onClick={this.handleClickMore} />
-            ) : null}
-          </>
+          <ImageGallery images={images} openModal={this.openModal} />
         )}
-        {this.state.modalIsOpen ? (
-          <Modal
-            src={this.state.modalImg}
-            alt={this.state.modalAlt}
-            handleClose={this.handleModalClose}
-          />
-        ) : null}
-      </div>
+
+        {loadMore && <Button onloadMore={this.onloadMore} page={page} />}
+
+        {showModal && (
+          <Modal largeImageURL={largeImageURL} onClose={this.closeModal} />
+        )}
+      </>
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
